@@ -61,7 +61,7 @@ export const Chat: React.FC<ChatProps> = ({ socket }) => {
     return (
         <div>
             <div className='message-container min-h-44 max-h-44 min-w-80 bg-slate-50 mt-6 overflow-y-auto select-none'>
-                {messages.map(message => (<Message message={message}></Message>))}
+                {messages.map(message => (<Message key={message} message={message}></Message>))}
                 <div ref={messagesEndRef} />
             </div>
             <form className='flex mt-2' noValidate autoComplete="off" onSubmit={sendMessage}>
