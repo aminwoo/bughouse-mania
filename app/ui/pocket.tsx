@@ -11,9 +11,10 @@ interface Pocket {
 
 interface PocketProps {
     color: "w" | "b"; 
+    small: boolean;
 }
 
-export const Pocket: React.FC<PocketProps> = ({ color }) => {
+export const Pocket: React.FC<PocketProps> = ({ color, small }) => {
     const pieces: Pocket = {p: 0, n: 2, b: 1, r: 0, q: 1}; 
 
     const handleDrag = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -22,7 +23,7 @@ export const Pocket: React.FC<PocketProps> = ({ color }) => {
     };
 
     return (
-        <div className="pocket-container flex">
+        <div className={`pocket-container flex ${small ? "scale-75" : "scale-100"}`}>
             {['q', 'r', 'b', 'n', 'p'].map(piece => (
             <div className="relative" key={`${color}${piece}`}>
                 <Image className={`${color}${piece} ${pieces[piece as keyof Pocket] > 0 ? "opacity-100" : "opacity-50"}`} key={`${color}${piece}`} onMouseDown={handleDrag} src={`/images/${color}${piece}.png`} width={75} height={75} alt={`${piece}`} priority></Image>

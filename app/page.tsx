@@ -296,7 +296,7 @@ export default function Home() {
               <div className="top-container">
                 <Clock timeLeft={times[0]} running={running[0]} updateTime={(newTime) => updateTime(0, newTime)}></Clock>
                 <div className="pocket-container ml-6">                 
-                  <Pocket color="b"></Pocket>
+                  <Pocket color="b" small={false}></Pocket>
                 </div>
               </div>
               <div className="glass rounded-lg shadow-xl">
@@ -307,7 +307,7 @@ export default function Home() {
                   <Clock timeLeft={times[1]} running={running[1]} updateTime={(newTime) => updateTime(1, newTime)}></Clock>
                 </div>
                 <div className="pocket-container mr-8">
-                  <Pocket color="w"></Pocket>
+                  <Pocket color="w" small={false}></Pocket>
                 </div>
                 <div className="controls-container">
                   <button onClick={rotate}>
@@ -320,9 +320,19 @@ export default function Home() {
               </div>
             </div>
             <div className="partner-board">
-              <Clock timeLeft={times[2]} running={running[2]} updateTime={(newTime) => updateTime(2, newTime)} ></Clock>
+              <div className="top-container"> 
+                <Clock timeLeft={times[2]} running={running[2]} updateTime={(newTime) => updateTime(2, newTime)} ></Clock>
+                <div className="pocket-container -translate-x-10">                 
+                  <Pocket color="b" small={true}></Pocket>
+                </div>
+              </div>
               <BoardComponent config={partnerConfig} /> 
-              <Clock timeLeft={times[3]} running={running[3]} updateTime={(newTime) => updateTime(3, newTime)} ></Clock>
+              <div className="bottom-container">
+                <Clock timeLeft={times[3]} running={running[3]} updateTime={(newTime) => updateTime(3, newTime)} ></Clock>
+                <div className="pocket-container -translate-x-10">                 
+                  <Pocket color="w" small={true}></Pocket>
+                </div>
+              </div>
               <div><Chat socket={socket}></Chat></div>
             </div>
         </div>
