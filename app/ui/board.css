@@ -1,0 +1,25 @@
+
+.chessboard-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px;
+    border: 2px solid #808080; 
+    border-radius: 4px;
+    overflow: hidden; 
+}
+  
+.chessboard {
+    width: 100%;
+    max-width: 600px; 
+    aspect-ratio: 1; 
+}
+  
+.light-square {
+    background-color: #f0d9b5; 
+}
+  
+.dark-square {
+    background-color: #b58863; 
+}
+  

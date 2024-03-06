@@ -1,113 +1,338 @@
-import Image from "next/image";
+'use client';
+
+import { useEffect, useState, useCallback, useRef } from 'react'; 
+import BoardComponent from './ui/boardComponent';
+import io from 'socket.io-client';
+import { Board, encode, decode } from './lib/board';
+import { Config } from 'chessground/config';
+import { Clock } from './ui/clock';
+import { Button } from '@mui/material';
+import { Chat } from './ui/chat';
+import { Api } from 'chessground/api';
+import { Chessground } from 'chessground';
+import { Chess, Move, WHITE } from 'chess.js';
+import { Pocket } from './ui/pocket';
+
+import Image from 'next/image'
+
+import "./page.css"
+
+const socket = io('http://localhost:8080'); 
+
+type Side = 'white' | 'black' | undefined;
+
 
 export default function Home() {
+
+  const [board] = useState<Board>(new Board()); 
+  const [cg, setCg] = useState<Api>(); 
+  const [config, setConfig] = useState<Config>({}); 
+  const [partnerConfig, setPartnerConfig] = useState<Config>({movable: {free: false}});
+
+  const [times, setTimes] = useState<number[]>([1800, 1800, 1800, 1800]);  
+  const [running, setRunning] = useState<boolean[]>([false, false, false, false]); 
+
+  let userside: Side;
+
+  const them = (side: Side) => {
+    return side === 'white' ? 'black' : 'white';
+  }
+
+  const updateTime = (index: number, newTime: number) => {
+    setTimes((currentTimes) => {
+        const updatedTimes = [...currentTimes];
+        updatedTimes[index] = newTime;
+        return updatedTimes;
+    });
+  };
+
+  const updateRunning = (index: number, isRunning: boolean) => {
+    setRunning((currentRunning) => {
+      let updatedRunning = [...currentRunning];
+      updatedRunning[index] = isRunning; 
+      return updatedRunning; 
+    });
+  }
+
+  const onMove = (orig: string, dest: string) => {
+    const move = orig + dest; 
+    socket.emit('message', `move ${encode(move)}`);
+    board.play(move);
+
+    updateRunning(0, true); 
+    updateRunning(1, false);
+  };
+
+  const onPremove = (orig: string, dest: string) => {
+    const move = orig + dest; 
+    socket.emit('message', `premove ${encode(move)} false`);
+  }
+  
+  const cancelPremoves = () => {
+    socket.emit('message', `cancel`);
+  }
+
+  useEffect(() => {
+    const messageHandler = (data : any) => {
+      const args = data.toString().split(' ');
+      if (args[0] === 'finished') {
+        board.reset(); 
+        setRunning([false, false, false, false]);
+        userside = undefined;
+      }
+      else if (args[0] === 'userside') {
+        if (userside !== args[1]) {
+          userside = args[1]; 
+
+          cg?.set({
+            orientation: args[1],
+            movable: {
+              ...config.movable, 
+              color: args[1],
+            },
+            turnColor: "white", // White goes first
+            fen: "start",
+          });
+          setPartnerConfig(config => ({
+            orientation: them(args[1]),
+          }));
+        }
+      }
+      else if (args[0] === 'moves1') {
+        const fen = board.doMoves(args[1], 0);
+        if (fen !== null) {
+          cg?.cancelPremove();
+          cg?.set({
+            movable: {
+              ...config.movable, 
+              dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
+            },
+            fen: fen,
+            turnColor: board.getTurn(0), 
+            lastMove: board.lastMove(0),
+            check: board.board[0].inCheck(),
+          });
+        }
+      }
+      else if (args[0] === 'moves2') {
+        const fen = board.doMoves(args[1], 1);
+        if (fen !== null) {
+          setPartnerConfig(config => ({...config,
+            fen: fen,
+            lastMove: board.lastMove(1)
+          }));
+        }
+      }
+      else if (args[0] === 'times1') {
+        const newTimes = args[1].split(',');
+        if (userside === 'white') {
+          setTimes(times => ([newTimes[1], newTimes[0], times[2], times[3]]));
+        }
+        else {
+          setTimes(times => ([newTimes[0], newTimes[1], times[2], times[3]]));
+        }
+      }
+      else if (args[0] === 'times2') {
+        const newTimes = args[1].split(',');
+        if (userside === 'white') {
+          setTimes(times => ([times[0], times[1], newTimes[0], newTimes[1]]));
+        }
+        else {
+          setTimes(times => ([times[0], times[1], newTimes[1], newTimes[0]]));
+        }
+      }
+
+      if (userside && board.board[0].turn() === userside[0]) {
+        updateRunning(0, false); 
+        updateRunning(1, true); 
+        updateRunning(2, false); 
+        updateRunning(3, true); 
+      }
+      else {
+        updateRunning(0, true); 
+        updateRunning(1, false); 
+        updateRunning(2, true); 
+        updateRunning(3, false); 
+      }
+    }; 
+
+    socket.on('message', messageHandler);
+
+    return () => {
+      socket.off('message', messageHandler);
+    };
+  }, [cg, config, board]);
+
+  const handleKeyPress = useCallback((event: KeyboardEvent) => {
+    //cg?.move('e7', 'e5');
+      // for crazyhouse and board editors
+    //cg?.newPiece({ color: 'black', role: 'queen'}, 'a3');
+    //cg?.set({
+    ////    movable: {
+    //        dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
+    //    },
+    //});
+    //board.board[0].load('rn1qkbnr/pP1bp1pp/5p2/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 5');
+    //cg.set({
+    //  ...config,
+    //  fen: 'rn1qkbnr/pP1bp1pp/5p2/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 5',
+    //  movable: {
+    //    dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
+    //  },
+    //});
+
+    console.log(`Key pressed: ${event.key}`);
+
+  }, [cg]);
+
+  useEffect(() => {
+    /*document.addEventListener('keydown', handleKeyPress);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyPress);
+    };*/
+  }, [handleKeyPress]);
+
+  function convertToDestsMap(moves : Move[]) {
+    const dests = new Map();
+    moves.forEach(move => {
+        if (!dests.has(move.from)) {
+            dests.set(move.from, []);
+        }
+        if (move.from === 'e1' && move.to === 'g1') {
+          dests.get(move.from).push('h1');
+        }
+        if (move.from === 'e1' && move.to === 'c1') {
+          dests.get(move.from).push('a1');
+        }
+        if (move.from === 'e8' && move.to === 'g8') {
+          dests.get(move.from).push('h8');
+        }
+        if (move.from === 'e8' && move.to === 'c8') {
+          dests.get(move.from).push('a8');
+        }
+        dests.get(move.from).push(move.to);
+    });
+    return dests;
+  }
+
+  const play = () => {
+    socket.emit('message', 'seek');
+  };
+
+  const resign = () => {
+    socket.emit('message', 'resign');
+  };
+
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      const config = {
+        movable: {
+          events: {
+            after: (orig: string, dest: string) => {
+              onMove(orig, dest);
+              cg.set({
+                  movable: {
+                      dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
+                  },
+                  turnColor: board.getTurn(0),
+                  check: board.board[0].inCheck(),
+              });
+            },
+            afterNewPiece: (role: string, key: string) => {
+              console.log(role, key); 
+            }
+          },
+          free: false, 
+          dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
+        },
+        premovable: {
+          enabled: true, 
+          showDests: true, 
+          events: {
+              set: (orig:string , dest: string) => {
+                onPremove(orig, dest); 
+              },
+              unset: () => {
+                cancelPremoves(); 
+              }
+          }
+        }
+      };
+      const cg = Chessground(ref.current, config);
+      setCg(cg); 
+      setConfig(config); 
+    }
+  },[]);
+
+  const handleMouse = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (cg) {
+        cg.dragNewPiece({ color: 'black', role: 'queen'}, event.nativeEvent as unknown as MouseEvent); 
+    }
+  };
+
+  const rotate = () => {
+    cg?.toggleOrientation();
+  }
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <div>
+      <div className="flex">
+        <div className="side-panel">
+          <div className='navigation'>
+            <Button variant="contained" onClick={play}>Play</Button>
+            <Button variant="contained">Analysis</Button>
+            <Button variant="contained">Openings</Button>
+            <Button variant="contained">Puzzles</Button>
+          </div>
+          <div className="footer">
+              <Button variant="contained" onClick={resign}>Logout</Button>
+            </div>
+        </div>
+          <div className="flex rounded-lg bg-white ml-60 mt-6 outline outline-2 outline-gray-300 shadow-lg">
+            <div className="main-board">
+              <div className="top-container">
+                <Clock timeLeft={times[0]} running={running[0]} updateTime={(newTime) => updateTime(0, newTime)}></Clock>
+                <div className="pocket-container ml-6">                 
+                  <Pocket color="b"></Pocket>
+                </div>
+              </div>
+              <div className="glass rounded-lg shadow-xl">
+                <div ref={ref} style={{ width: '657px', height: '657px' }}></div>
+              </div>
+              <div className="bottom-container">
+                <div className="clock-container">
+                  <Clock timeLeft={times[1]} running={running[1]} updateTime={(newTime) => updateTime(1, newTime)}></Clock>
+                </div>
+                <div className="pocket-container mr-8">
+                  <Pocket color="w"></Pocket>
+                </div>
+                <div className="controls-container">
+                  <button onClick={rotate}>
+                    <Image src="/images/rotate.png" width={25} height={25} alt="Rotate"/>
+                  </button>
+                  <button onClick={rotate}>
+                    <Image src="/images/settings.svg" width={25} height={25} alt="Settings"/>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="partner-board">
+              <Clock timeLeft={times[2]} running={running[2]} updateTime={(newTime) => updateTime(2, newTime)} ></Clock>
+              <BoardComponent config={partnerConfig} /> 
+              <Clock timeLeft={times[3]} running={running[3]} updateTime={(newTime) => updateTime(3, newTime)} ></Clock>
+              <div><Chat socket={socket}></Chat></div>
+            </div>
         </div>
       </div>
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
+
+      <div onMouseDown={handleMouse} style={{ width: '30px', height: '30px', backgroundColor: 'yellow' }}>
+        Q
       </div>
 
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+    </div>
   );
 }
