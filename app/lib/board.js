@@ -1,5 +1,6 @@
 const { Chess } = require('chess.js');
 const tcn = require('@savi2w/chess-tcn');
+const { PAWN } = require("chess.js");
 
 const SQUARE_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?";
 const DROP_CHARACTERS = {

@@ -31,12 +31,17 @@ interface ChatProps {
 export const Chat: React.FC<ChatProps> = ({ socket }) => {
     const [messages, setMessages] = useState<string[]>([]); 
     const [text, setText] = useState(''); 
-    const messagesEndRef = useRef<HTMLDivElement>(null)
+    const ref = useRef<HTMLDivElement>(null)
 
     const addMessage = (message: string) => {
         setMessages(prevMessages => [...prevMessages, message]);
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
+
+    useEffect(() => {
+        if (ref.current) {
+            ref.current.scrollTop = ref.current.scrollHeight;
+        }
+    }, [messages]);
 
     useEffect(() => {
         const callback = (message: string) => addMessage(message); 
@@ -57,18 +62,19 @@ export const Chat: React.FC<ChatProps> = ({ socket }) => {
         setText('');
     }
 
+    let id = 1; 
+
     const classes = useStyles();
     return (
         <div>
-            <div className='message-container min-h-44 max-h-44 min-w-80 bg-slate-50 mt-6 overflow-y-auto select-none'>
-                {messages.map(message => (<Message key={message} message={message}></Message>))}
-                <div ref={messagesEndRef} />
+            <div className='message-container min-h-44 max-h-44 min-w-80 bg-slate-50 mt-6 overflow-y-auto select-none' ref={ref}>
+                {messages.map(message => (<Message key={id++} message={message}></Message>))}
             </div>
             <form className='flex mt-2' noValidate autoComplete="off" onSubmit={sendMessage}>
                 <TextField
                     id="chat-input"
                     label="Type Message..."
-                    className={classes.wrapText}
+                    className={classes.wrapText + " select-none"} 
                     value={text}
                     onChange={handleTextChange}
                     

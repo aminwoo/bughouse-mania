@@ -10,7 +10,8 @@ import { Button } from '@mui/material';
 import { Chat } from './ui/chat';
 import { Api } from 'chessground/api';
 import { Chessground } from 'chessground';
-import { Chess, Move, WHITE } from 'chess.js';
+import { Key, Piece } from 'chessground/types';
+import { Chess, Move, PAWN, WHITE } from 'chess.js';
 import { Pocket } from './ui/pocket';
 
 import Image from 'next/image'
@@ -32,7 +33,9 @@ export default function Home() {
   const [times, setTimes] = useState<number[]>([1800, 1800, 1800, 1800]);  
   const [running, setRunning] = useState<boolean[]>([false, false, false, false]); 
 
-  let userside: Side;
+  const [hand, setHand] = useState<string[]>(['', 'p', '', '']);
+
+  const [side, setSide] = useState<Side>('white'); 
 
   const them = (side: Side) => {
     return side === 'white' ? 'black' : 'white';
@@ -55,7 +58,24 @@ export default function Home() {
   }
 
   const onMove = (orig: string, dest: string) => {
-    const move = orig + dest; 
+    let move = orig + dest; 
+    if (move === 'e1a1') {
+        move = 'e1c1'; 
+    }
+    if (move === 'e1h1') {
+        move = 'e1g1'; 
+    }
+    if (move === 'e8a8') {
+        move = 'e8c8'; 
+    }
+    if (move === 'e8h8') {
+        move = 'e8g8'; 
+    }
+     
+    if (board.board[0].get(orig).type === PAWN && (dest[1] == '1' || dest[1] == '8')) {
+      move += 'q';
+    }
+
     socket.emit('message', `move ${encode(move)}`);
     board.play(move);
 
@@ -63,8 +83,30 @@ export default function Home() {
     updateRunning(1, false);
   };
 
+  const onDrop = (role: string, key: string) => {
+    let move = (role[0] === 'k' ? 'n' : role[0]) + '@' + key; 
+    if (board.isLegal(move)) {
+      socket.emit('message', `move ${encode(move)}`);
+      board.play(move);
+      updateRunning(0, true); 
+      updateRunning(1, false);
+    }
+  }
+
   const onPremove = (orig: string, dest: string) => {
-    const move = orig + dest; 
+    let move = orig + dest; 
+    if (move === 'e1a1') {
+        move = 'e1c1'; 
+    }
+    if (move === 'e1h1') {
+        move = 'e1g1'; 
+    }
+    if (move === 'e8a8') {
+        move = 'e8c8'; 
+    }
+    if (move === 'e8h8') {
+        move = 'e8g8'; 
+    }
     socket.emit('message', `premove ${encode(move)} false`);
   }
   
@@ -76,13 +118,15 @@ export default function Home() {
     const messageHandler = (data : any) => {
       const args = data.toString().split(' ');
       if (args[0] === 'finished') {
-        board.reset(); 
         setRunning([false, false, false, false]);
-        userside = undefined;
+      }
+      if (args[0] === 'starting') {
+        board.reset(); 
+        setSide(undefined);
       }
       else if (args[0] === 'userside') {
-        if (userside !== args[1]) {
-          userside = args[1]; 
+        if (side != args[1]) {
+          setSide(args[1]); 
 
           cg?.set({
             orientation: args[1],
@@ -102,6 +146,7 @@ export default function Home() {
         const fen = board.doMoves(args[1], 0);
         if (fen !== null) {
           cg?.cancelPremove();
+          cg?.cancelPredrop();
           cg?.set({
             movable: {
               ...config.movable, 
@@ -125,7 +170,7 @@ export default function Home() {
       }
       else if (args[0] === 'times1') {
         const newTimes = args[1].split(',');
-        if (userside === 'white') {
+        if (side === 'white') {
           setTimes(times => ([newTimes[1], newTimes[0], times[2], times[3]]));
         }
         else {
@@ -134,15 +179,49 @@ export default function Home() {
       }
       else if (args[0] === 'times2') {
         const newTimes = args[1].split(',');
-        if (userside === 'white') {
+        if (side === 'white') {
           setTimes(times => ([times[0], times[1], newTimes[0], newTimes[1]]));
         }
         else {
           setTimes(times => ([times[0], times[1], newTimes[1], newTimes[0]]));
         }
       }
+      else if (args[0] === 'whitehand1') {
+        if (side === 'white') {
+          setHand(prevHand => [prevHand[0], args[1], prevHand[2], prevHand[3]]);
+        }
+        else {
+          setHand(prevHand => [args[1], prevHand[1], prevHand[2], prevHand[3]]);
+        }
+        board.setWhitehand(args[1]); 
+      }
+      else if (args[0] === 'blackhand1') {
+        if (side === 'white') {
+          setHand(prevHand => [args[1], prevHand[1], prevHand[2], prevHand[3]]);
+        }
+        else {
+          setHand(prevHand => [prevHand[0], args[1], prevHand[2], prevHand[3]]);
+        }
+        board.setBlackhand(args[1]); 
+      }
+      else if (args[0] === 'whitehand2') {
+        if (side === 'white') {
+          setHand(prevHand => [prevHand[0], prevHand[1], args[1], prevHand[3]]);
+        }
+        else {
+          setHand(prevHand => [prevHand[0], prevHand[1], prevHand[2], args[1]]);
+        }
+      }
+      else if (args[0] === 'blackhand2') {
+        if (side === 'white') {
+          setHand(prevHand => [prevHand[0], prevHand[1], prevHand[2], args[1]]);
+        }
+        else {
+          setHand(prevHand => [prevHand[0], prevHand[1], args[1], prevHand[3]]);
+        }
+      }
 
-      if (userside && board.board[0].turn() === userside[0]) {
+      if (side && board.board[0].turn() === side[0]) {
         updateRunning(0, false); 
         updateRunning(1, true); 
         updateRunning(2, false); 
@@ -161,7 +240,7 @@ export default function Home() {
     return () => {
       socket.off('message', messageHandler);
     };
-  }, [cg, config, board]);
+  }, [cg, config, board, side, running]);
 
   const handleKeyPress = useCallback((event: KeyboardEvent) => {
     //cg?.move('e7', 'e5');
@@ -173,24 +252,30 @@ export default function Home() {
     //    },
     //});
     //board.board[0].load('rn1qkbnr/pP1bp1pp/5p2/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 5');
-    //cg.set({
+    //cg?.set({
     //  ...config,
-    //  fen: 'rn1qkbnr/pP1bp1pp/5p2/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 5',
+     // fen: 'rn1qkbnr/pP1bp1pp/5p2/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 5',
     //  movable: {
     //    dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
     //  },
     //});
+    cg?.move('b7', 'a8');
+    const newPieces = new Map<Key, Piece | undefined>();
+    newPieces.set('a8', { role: 'queen', color: 'white' });
+    cg?.setPieces(newPieces);
+    //cg?.newPiece({ color: 'white', role: 'queen'}, 'a6');
+    //cg?.dragNewPiece({ color: 'white', role: 'pawn'}, event.nativeEvent as unknown as MouseEvent); 
 
     console.log(`Key pressed: ${event.key}`);
 
   }, [cg]);
 
   useEffect(() => {
-    /*document.addEventListener('keydown', handleKeyPress);
+    document.addEventListener('keydown', handleKeyPress);
 
     return () => {
       document.removeEventListener('keydown', handleKeyPress);
-    };*/
+    };
   }, [handleKeyPress]);
 
   function convertToDestsMap(moves : Move[]) {
@@ -231,7 +316,7 @@ export default function Home() {
       const config = {
         movable: {
           events: {
-            after: (orig: string, dest: string) => {
+            after: (orig: string, dest: string, metadata: any) => {
               onMove(orig, dest);
               cg.set({
                   movable: {
@@ -242,7 +327,15 @@ export default function Home() {
               });
             },
             afterNewPiece: (role: string, key: string) => {
-              console.log(role, key); 
+              onDrop(role, key); 
+              cg.set({
+                  movable: {
+                      dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
+                  },
+                  fen: board.board[0].fen(),
+                  turnColor: board.getTurn(0),
+                  check: board.board[0].inCheck(),
+              });
             }
           },
           free: false, 
@@ -252,14 +345,28 @@ export default function Home() {
           enabled: true, 
           showDests: true, 
           events: {
-              set: (orig:string , dest: string) => {
+              set: (orig: string , dest: string) => {
                 onPremove(orig, dest); 
               },
               unset: () => {
                 cancelPremoves(); 
+                cg.cancelPremove(); 
               }
           }
-        }
+        },
+        predroppable: {
+          enabled: true,
+          events: {
+            set: (role: string, key: string) => {
+              let move = (role[0] === 'k' ? 'n' : role[0]) + '@' + key; 
+              socket.emit('message', `premove ${encode(move)} false`);
+            },
+            unset: () => {
+              cancelPremoves(); 
+              cg.cancelPredrop(); 
+            }
+          }
+        },
       };
       const cg = Chessground(ref.current, config);
       setCg(cg); 
@@ -267,14 +374,10 @@ export default function Home() {
     }
   },[]);
 
-  const handleMouse = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (cg) {
-        cg.dragNewPiece({ color: 'black', role: 'queen'}, event.nativeEvent as unknown as MouseEvent); 
-    }
-  };
-
   const rotate = () => {
     cg?.toggleOrientation();
+    setSide(prevSide => them(prevSide)); 
+    setHand(prevHand => [prevHand[1], prevHand[0], prevHand[3], prevHand[2]]); 
   }
 
   return (
@@ -291,12 +394,12 @@ export default function Home() {
               <Button variant="contained" onClick={resign}>Logout</Button>
             </div>
         </div>
-          <div className="flex rounded-lg bg-white ml-60 mt-6 outline outline-2 outline-gray-300 shadow-lg">
+          <div className="flex rounded-lg bg-white ml-60 mt-6 outline outline-2 outline-gray-300 shadow-lg select-none">
             <div className="main-board">
               <div className="top-container">
                 <Clock timeLeft={times[0]} running={running[0]} updateTime={(newTime) => updateTime(0, newTime)}></Clock>
                 <div className="pocket-container ml-6">                 
-                  <Pocket color="b" small={false}></Pocket>
+                  <Pocket color={them(side)} hand={hand[0]} small={false} cg={cg}></Pocket>
                 </div>
               </div>
               <div className="glass rounded-lg shadow-xl">
@@ -307,9 +410,9 @@ export default function Home() {
                   <Clock timeLeft={times[1]} running={running[1]} updateTime={(newTime) => updateTime(1, newTime)}></Clock>
                 </div>
                 <div className="pocket-container mr-8">
-                  <Pocket color="w" small={false}></Pocket>
+                  <Pocket color={side} hand={hand[1]} small={false} cg={cg}></Pocket>
                 </div>
-                <div className="controls-container">
+                <div className="controls-container select-none">
                   <button onClick={rotate}>
                     <Image src="/images/rotate.png" width={25} height={25} alt="Rotate"/>
                   </button>
@@ -323,26 +426,20 @@ export default function Home() {
               <div className="top-container"> 
                 <Clock timeLeft={times[2]} running={running[2]} updateTime={(newTime) => updateTime(2, newTime)} ></Clock>
                 <div className="pocket-container -translate-x-10">                 
-                  <Pocket color="b" small={true}></Pocket>
+                  <Pocket color={side} hand={hand[2]} small={true}></Pocket>
                 </div>
               </div>
               <BoardComponent config={partnerConfig} /> 
               <div className="bottom-container">
                 <Clock timeLeft={times[3]} running={running[3]} updateTime={(newTime) => updateTime(3, newTime)} ></Clock>
                 <div className="pocket-container -translate-x-10">                 
-                  <Pocket color="w" small={true}></Pocket>
+                  <Pocket color={them(side)} hand={hand[3]} small={true}></Pocket>
                 </div>
               </div>
               <div><Chat socket={socket}></Chat></div>
             </div>
         </div>
       </div>
-
-
-      <div onMouseDown={handleMouse} style={{ width: '30px', height: '30px', backgroundColor: 'yellow' }}>
-        Q
-      </div>
-
     </div>
   );
 }
