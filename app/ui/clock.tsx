@@ -27,7 +27,7 @@ export const Clock: React.FC<Props> = ({ timeLeft, running, updateTime }) => {
         return () => clearInterval(interval); 
     }, [timeLeft, running, updateTime]);
 
-    const boxStyle = "flex rounded-sm mt-3 mb-4 min-h-16 min-w-36 max-w-36 items-center justify-center shadow-md" + (running ? (timeLeft < 200 ? " bg-red-300" : " bg-green-300" ) : ""); 
+    const boxStyle = "flex rounded-sm mt-3 mb-4 min-h-16 min-w-36 max-w-36 items-center justify-center shadow-md" + (running ? (timeLeft < 100 ? " bg-red-300" : " bg-green-300" ) : ""); 
     const textStyle = "font-bold text-4xl font-sans select-none " + (running ? "text-black" : "text-black"); 
 
     return (
