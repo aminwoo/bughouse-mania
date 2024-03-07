@@ -20,7 +20,7 @@ import "./page.css"
 
 const socket = io("http://localhost:8080"); 
 
-type Side = "white" | "black" | undefined;
+type Side = "white" | "black";
 
 
 export default function Home() {
@@ -34,7 +34,7 @@ export default function Home() {
   const [times, setTimes] = useState<number[]>([1800, 1800, 1800, 1800]);  
   const [running, setRunning] = useState<boolean[]>([false, false, false, false]); 
 
-  const [hand, setHand] = useState<string[]>(["", "p", "", ""]);
+  const [hand, setHand] = useState<string[]>(["", "", "", ""]);
   const [side, setSide] = useState<Side>("white"); 
 
   const them = (side: Side) => {
@@ -71,7 +71,6 @@ export default function Home() {
     if (move === "e8h8") {
         move = "e8g8"; 
     }
-     
     if (board.board[0].get(orig).type === PAWN && (dest[1] == "1" || dest[1] == "8")) {
       move += "q";
     }
@@ -120,23 +119,24 @@ export default function Home() {
       if (args[0] === "finished") {
         setPlaying(false);
       }
-      if (args[0] === "starting") {
+      else if (args[0] === "starting") {
         setPlaying(true);
         board.reset(); 
-        setSide(undefined);
+        setSide("white");
+        cg?.set({
+          turnColor: "white", 
+          fen: "start",
+        });
       }
       else if (args[0] === "userside") {
         if (side != args[1]) {
           setSide(args[1]); 
-
           cg?.set({
             orientation: args[1],
             movable: {
               ...config.movable, 
               color: args[1],
             },
-            turnColor: "white", // White goes first
-            fen: "start",
           });
           setPartnerConfig(config => ({
             orientation: them(args[1]),
@@ -252,35 +252,11 @@ export default function Home() {
     return () => {
       socket.off("message", messageHandler);
     };
-  }, [cg, config, board, side, running]);
+  }, [cg, config, board, side, running, times]);
 
   const handleKeyPress = useCallback((event: KeyboardEvent) => {
-    //cg?.move("e7", "e5");
-      // for crazyhouse and board editors
-    //cg?.newPiece({ color: "black", role: "queen"}, "a3");
-    //cg?.set({
-    ////    movable: {
-    //        dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
-    //    },
-    //});
-    //board.board[0].load("rn1qkbnr/pP1bp1pp/5p2/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 5");
-    //cg?.set({
-    //  ...config,
-     // fen: "rn1qkbnr/pP1bp1pp/5p2/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 5",
-    //  movable: {
-    //    dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
-    //  },
-    //});
-    cg?.move("b7", "a8");
-    const newPieces = new Map<Key, Piece | undefined>();
-    newPieces.set("a8", { role: "queen", color: "white" });
-    cg?.setPieces(newPieces);
-    //cg?.newPiece({ color: "white", role: "queen"}, "a6");
-    //cg?.dragNewPiece({ color: "white", role: "pawn"}, event.nativeEvent as unknown as MouseEvent); 
 
-    console.log(`Key pressed: ${event.key}`);
-
-  }, [cg]);
+  }, []);
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyPress);
@@ -328,7 +304,7 @@ export default function Home() {
       const config = {
         movable: {
           events: {
-            after: (orig: string, dest: string, metadata: any) => {
+            after: (orig: string, dest: string) => {
               onMove(orig, dest);
               cg.set({
                   movable: {
