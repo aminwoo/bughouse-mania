@@ -12,20 +12,8 @@ export class SoundPlayer {
         return this.playing;
     }
 
-    async createBuffer(paths, interval, count) {
-        let audio = [];
-        for (var path of paths) {
-            let audioBuffer = (await this.crunker.fetchAudio(path))[0]; 
-            audio.push(this.trimAudio(audioBuffer));
-        }
-        audio = this.crunker.concatAudio(audio); 
-
-        const audios = []
-        for (let i = 0; i < count; i++) {
-            audios.push(this.crunker.padAudio(audio, 0, (interval * i) / 1000))
-        }
-        this.buffer = this.crunker.mergeAudio(audios);
-
+    async createBuffer(path) {
+        this.buffer = (await this.crunker.fetchAudio(path))[0]; 
         return this.buffer; 
     }
 

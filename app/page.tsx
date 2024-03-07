@@ -13,6 +13,7 @@ import { Chessground } from "chessground";
 import { Key, Piece } from "chessground/types";
 import { Move, PAWN } from "chess.js";
 import { Pocket } from "./ui/pocket";
+import { SoundPlayer } from"./lib/playSound"
 
 import Image from "next/image"
 
@@ -22,6 +23,7 @@ const socket = io("http://localhost:8080");
 
 type Side = "white" | "black";
 
+const player = new SoundPlayer(); 
 
 export default function Home() {
 
@@ -89,6 +91,9 @@ export default function Home() {
       board.play(move);
       updateRunning(0, true); 
       updateRunning(1, false);
+
+      player.createBuffer("sounds/move-self.mp3");
+      player.play();
     }
   }
 
@@ -107,6 +112,9 @@ export default function Home() {
         move = "e8g8"; 
     }
     socket.emit("message", `premove ${encode(move)} false`);
+
+    player.createBuffer("sounds/premove.mp3");
+    player.play();
   }
   
   const cancelPremoves = () => {
@@ -114,7 +122,7 @@ export default function Home() {
   }
 
   useEffect(() => {
-    const messageHandler = (data : any) => {
+    const messageHandler = async (data : any) => {
       const args = data.toString().split(" ");
       if (args[0] === "finished") {
         setPlaying(false);
@@ -146,6 +154,15 @@ export default function Home() {
       else if (args[0] === "moves1") {
         const fen = board.doMoves(args[1], 0);
         if (fen !== null) {
+          if (board.board[0].inCheck()) {
+            await player.createBuffer("sounds/move-check.mp3");
+            player.play();
+          }
+          else {
+            await player.createBuffer("sounds/move-self.mp3");
+            player.play();
+          }
+
           cg?.cancelPremove();
           cg?.cancelPredrop();
           cg?.set({
@@ -304,8 +321,20 @@ export default function Home() {
       const config = {
         movable: {
           events: {
-            after: (orig: string, dest: string) => {
+            after: async (orig: string, dest: string, meta: any) => {
               onMove(orig, dest);
+              if (board.board[0].inCheck()) {
+                await player.createBuffer("sounds/move-check.mp3");
+                player.play();
+              }
+              else if (meta.captured) {
+                await player.createBuffer("sounds/capture.mp3");
+                player.play();
+              }
+              else {
+                await player.createBuffer("sounds/move-self.mp3");
+                player.play();
+              }
               cg.set({
                   movable: {
                       dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
