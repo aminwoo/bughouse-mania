@@ -1,9 +1,9 @@
-'use effect';
+"use effect";
 
-import React, { useRef, useEffect, useState } from 'react';
-import { Chessground } from 'chessground';
-import { Config } from 'chessground/config';
-import './theme.css';
+import React, { useRef, useEffect, useState } from "react";
+import { Chessground } from "chessground";
+import { Config } from "chessground/config";
+import "./theme.css";
 
 interface Props {
     config: Config;
@@ -21,7 +21,7 @@ const BoardComponent: React.FC<Props> = ({ config }) => {
 
     return (
         <div>
-            <div ref={ref} style={{ width: '397px', height: '397px' }}></div>
+            <div ref={ref} style={{ width: "397px", height: "397px" }}></div>
         </div>
     );
 }

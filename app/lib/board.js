@@ -186,14 +186,6 @@ class Board {
         return fen;
     }
 
-    getPremoves() {
-        this.board[0]._turn = this.board[0]._turn === 'w' ? 'b' : 'w'; 
-        const premoves = this.board[0].moves({ verbose: true });
-        this.board[0]._turn = this.board[0]._turn === 'w' ? 'b' : 'w'; 
-        console.log(premoves);
-        return premoves; 
-    }
-
     setWhitehand(hand) {
         this.whitehand = hand; 
     }
@@ -251,10 +243,6 @@ class Board {
             }
         }
         return false; 
-    }
-
-    getFenWithHand() {
-        return this.fen[0].replace(' ', '[' + this.whitehand.toUpperCase() + this.blackhand.toLowerCase() + '] '); 
     }
 }
 

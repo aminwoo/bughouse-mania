@@ -35,7 +35,6 @@ const useStyles = makeStyles((theme: Theme) =>
   })
 );
 
-
 interface MessageProps {
   message: string,
 }
