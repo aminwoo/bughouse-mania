@@ -1,6 +1,7 @@
 const { Chess } = require('chess.js');
 const tcn = require('@savi2w/chess-tcn');
 const { PAWN } = require("chess.js");
+const { WHITE } = require("chess.js");
 
 const SQUARE_CHARACTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?";
 const DROP_CHARACTERS = {
@@ -73,7 +74,8 @@ function applyMove(board, move) {
     const isPromotion = secondChar in PROMOTION_CHARACTERS;
     if (isDrop) {
         const to = squareCharacterToAlgebraicSquare(secondChar);
-        board.put({ type: DROP_CHARACTERS[firstChar], color: board.turn() }, to);
+        const color = board.turn();
+        board.put({ type: DROP_CHARACTERS[firstChar], color: color }, to);
         let [
         piecePlacement, sideToMove,
         castling, enPassantTarget, halfmoveClock, fullmoveNumber,] = board.fen().split(" ");
@@ -92,7 +94,7 @@ function applyMove(board, move) {
             fullmoveNumber,
         ].join(" ");
         board.load(fenWithSideToMoveSwapped);
-        return [to]
+        return {color: color, to: to, lan: `${DROP_CHARACTERS[firstChar]}@${to}`};
     }
     else if (isPromotion) {
         const from = squareCharacterToAlgebraicSquare(firstChar);
@@ -101,14 +103,12 @@ function applyMove(board, move) {
         const { to: promotion, direction } = PROMOTION_CHARACTERS[secondChar];
         const toFile = "abcdefgh"["abcdefgh".indexOf(fromFile) + direction];
         const toRank = fromRank === "7" ? "8" : "1";
-        board.move({ from, to: `${toFile}${toRank}`, promotion });
-        return [from, `${toFile}${toRank}`]; 
+        return board.move({ from, to: `${toFile}${toRank}`, promotion });
     }
     else {
         const from = squareCharacterToAlgebraicSquare(firstChar);
         const to = squareCharacterToAlgebraicSquare(secondChar);
-        board.move(`${from}${to}`, {sloppy: true});
-        return [from, to]; 
+        return board.move(`${from}${to}`, {sloppy: true});
     }
 }
 
@@ -149,22 +149,11 @@ class Board {
     }
 
     play(move) {
-        if (move === 'e1a1') {
-            move = 'e1c1'; 
+        if (this.isLegal(move)) {
+            this.movesCnt[0]++; 
+            return applyMove(this.board[0], encode(move));
         }
-        if (move === 'e1h1') {
-            move = 'e1g1'; 
-        }
-        if (move === 'e8a8') {
-            move = 'e8c8'; 
-        }
-        if (move === 'e8h8') {
-            move = 'e8g8'; 
-        }
-        this.history[0].push(applyMove(this.board[0], encode(move)));
-        this.movesCnt[0]++; 
-        this.fen[0] = this.board[0].fen(); 
-        return this.fen[0]; 
+        return null; 
     }
 
     lastMove(board_num) {

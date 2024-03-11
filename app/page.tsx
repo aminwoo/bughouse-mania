@@ -11,8 +11,9 @@ import { Chat } from "./ui/chat";
 import { Api } from "chessground/api";
 import { Chessground } from "chessground";
 import { Key, Piece } from "chessground/types";
-import { Move, PAWN } from "chess.js";
+import { BLACK, Move, PAWN, WHITE } from "chess.js";
 import { Pocket } from "./ui/pocket";
+import { PIECE_MAPPINGS } from "./lib/constants";
 
 import Image from "next/image"
 
@@ -56,64 +57,16 @@ export default function Home() {
     });
   }
 
-  const onMove = (orig: string, dest: string) => {
-    let move = orig + dest; 
-    if (move === "e1a1") {
-        move = "e1c1"; 
-    }
-    if (move === "e1h1") {
-        move = "e1g1"; 
-    }
-    if (move === "e8a8") {
-        move = "e8c8"; 
-    }
-    if (move === "e8h8") {
-        move = "e8g8"; 
-    }
-    if (board.board[0].get(orig).type === PAWN && (dest[1] == "1" || dest[1] == "8")) {
-      move += "q";
-    }
-
-    socket.emit("message", `move ${encode(move)}`);
-    board.play(move);
-
-    updateRunning(0, true); 
-    updateRunning(1, false);
-  };
-
   const onDrop = (role: string, key: string) => {
     let move = (role[0] === "k" ? "n" : role[0]) + "@" + key; 
     if (board.isLegal(move)) {
       socket.emit("message", `move ${encode(move)}`);
-      board.play(move);
+      console.log(board.play(move)); 
+      new Audio("sounds/move-self.mp3").play();
+
       updateRunning(0, true); 
       updateRunning(1, false);
-
-      new Audio("sounds/move-self.mp3").play();
     }
-  }
-
-  const onPremove = (orig: string, dest: string) => {
-    let move = orig + dest; 
-    if (move === "e1a1") {
-        move = "e1c1"; 
-    }
-    if (move === "e1h1") {
-        move = "e1g1"; 
-    }
-    if (move === "e8a8") {
-        move = "e8c8"; 
-    }
-    if (move === "e8h8") {
-        move = "e8g8"; 
-    }
-    socket.emit("message", `premove ${encode(move)} false`);
-
-    new Audio("sounds/premove.mp3").play();
-  }
-  
-  const cancelPremoves = () => {
-    socket.emit("message", `cancel`);
   }
 
   useEffect(() => {
@@ -121,53 +74,68 @@ export default function Home() {
       const args = data.toString().split(" ");
       if (args[0] === "finished") {
         setPlaying(false);
-      }
-      else if (args[0] === "starting") {
-        setPlaying(true);
-        board.reset(); 
-        setSide("white");
-        cg?.set({
-          turnColor: "white", 
-          fen: "start",
-        });
+        cg?.cancelPremove();
+        cg?.cancelPredrop();
       }
       else if (args[0] === "userside") {
-        if (side != args[1]) {
-          setSide(args[1]); 
+        if (!playing) {
+          board.reset(); 
           cg?.set({
-            orientation: args[1],
             movable: {
               ...config.movable, 
-              color: args[1],
+              color: args[1], 
             },
+            orientation: args[1],
+            turnColor: "white",
+            fen: board.board[0].fen(),
           });
           setPartnerConfig(config => ({
             orientation: them(args[1]),
           }));
+
+          setPlaying(true);
+          setSide(args[1]); 
         }
       }
-      else if (args[0] === "moves1") {
-        const fen = board.doMoves(args[1], 0);
-        if (fen !== null) {
-          if (board.board[0].inCheck()) {
-            new Audio("sounds/move-check.mp3").play();
+      else if (args[0] === "move") {
+        cg?.cancelPremove();
+        cg?.cancelPredrop();
+
+        const move = decode(args[1]);
+        const res = board.play(move); 
+
+        if (res) {
+          if (res.lan[1] === '@') {
+            cg?.newPiece({ role: PIECE_MAPPINGS[move[0]], color: res.color === 'w' ? "white" : "black" }, res.to);
           }
           else {
-            new Audio("sounds/move-self.mp3").play();
+            cg?.move(res.from, res.to); 
+            if (res.promotion) {
+              cg?.setPieces(new Map([[res.to as Key, { role: PIECE_MAPPINGS[res.promotion], color: res.color === 'w' ? "white" : "black" }]]));
+            }
+            if (res.flags === 'e') {
+              cg?.setPieces(new Map([[`${res.to[0]}${res.from[1]}` as Key, undefined]]));
+            }
           }
 
-          cg?.cancelPremove();
-          cg?.cancelPredrop();
           cg?.set({
             movable: {
               ...config.movable, 
               dests: convertToDestsMap(board.board[0].moves({ verbose: true })),
             },
-            fen: fen,
             turnColor: board.getTurn(0), 
-            lastMove: board.lastMove(0),
             check: board.board[0].inCheck(),
           });
+
+          if (board.board[0].inCheck()) {
+            new Audio("sounds/move-check.mp3").play();
+          }
+          else if (res.captured) {
+            new Audio("sounds/capture.mp3").play();
+          }
+          else {
+            new Audio("sounds/move-self.mp3").play();
+          }
         }
       }
       else if (args[0] === "moves2") {
@@ -175,7 +143,6 @@ export default function Home() {
         if (fen !== null) {
           setPartnerConfig(config => ({...config,
             fen: fen,
-            lastMove: board.lastMove(1)
           }));
         }
       }
@@ -264,18 +231,6 @@ export default function Home() {
     };
   }, [cg, config, board, side, running, times]);
 
-  const handleKeyPress = useCallback((event: KeyboardEvent) => {
-
-  }, []);
-
-  useEffect(() => {
-    document.addEventListener("keydown", handleKeyPress);
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyPress);
-    };
-  }, [handleKeyPress]);
-
   function convertToDestsMap(moves : Move[]) {
     const dests = new Map();
     moves.forEach(move => {
@@ -315,12 +270,42 @@ export default function Home() {
         movable: {
           events: {
             after: (orig: string, dest: string, meta: any) => {
-              onMove(orig, dest);
+              let move = orig + dest; 
+              if (board.board[0].getCastlingRights(WHITE).q && move === 'e1a1') {
+                  move = 'e1c1'; 
+              }
+              if (board.board[0].getCastlingRights(WHITE).k && move === 'e1h1') {
+                  move = 'e1g1'; 
+              }
+              if (board.board[0].getCastlingRights(BLACK).q && move === 'e8a8') {
+                  move = 'e8c8'; 
+              }
+              if (board.board[0].getCastlingRights(BLACK).k && move === 'e8h8') {
+                  move = 'e8g8'; 
+              }
+              if (board.board[0].get(orig).type === PAWN && (dest[1] == "1" || dest[1] == "8")) {
+                move += "q";
+              }
+          
+              socket.emit("message", `move ${encode(move)}`);
+              const res = board.play(move); 
+
+              if (res.promotion) {
+                const newPieces = new Map<Key, Piece | undefined>();
+                newPieces.set(res.to, { role: PIECE_MAPPINGS[res.promotion], color: side });
+                cg.setPieces(newPieces);
+              }
+              if (res.flags === 'e') {
+                cg.setPieces(new Map([[`${res.to[0]}${res.from[1]}` as Key, undefined]]));
+              }
+          
+              updateRunning(0, true); 
+              updateRunning(1, false);
 
               if (board.board[0].inCheck()) {
                 new Audio("sounds/move-check.mp3").play();
               }
-              else if (meta.captured) {
+              else if (res.captured) {
                 new Audio("sounds/capture.mp3").play();
               }
               else {
@@ -354,10 +339,27 @@ export default function Home() {
           showDests: true, 
           events: {
               set: (orig: string , dest: string) => {
-                onPremove(orig, dest); 
+                let move = orig + dest; 
+                if (board.board[0].getCastlingRights(WHITE).q && move === 'e1a1') {
+                  move = 'e1c1'; 
+                }
+                if (board.board[0].getCastlingRights(WHITE).k && move === 'e1h1') {
+                  move = 'e1g1'; 
+                }
+                if (board.board[0].getCastlingRights(BLACK).q && move === 'e8a8') {
+                  move = 'e8c8'; 
+                }
+                if (board.board[0].getCastlingRights(BLACK).k && move === 'e8h8') {
+                  move = 'e8g8'; 
+                }
+                if (board.board[0].get(orig).type === PAWN && (dest[1] == "1" || dest[1] == "8")) {
+                  move += "q";
+                }
+                socket.emit("message", `premove ${encode(move)} false`);
+                new Audio("sounds/premove.mp3").play();
               },
               unset: () => {
-                cancelPremoves(); 
+                socket.emit("message", "cancel");
                 cg.cancelPremove(); 
               }
           }
@@ -370,7 +372,7 @@ export default function Home() {
               socket.emit("message", `premove ${encode(move)} false`);
             },
             unset: () => {
-              cancelPremoves(); 
+              socket.emit("message", "cancel");
               cg.cancelPredrop(); 
             }
           }
@@ -387,6 +389,24 @@ export default function Home() {
     setSide(prevSide => them(prevSide)); 
     setHand(prevHand => [prevHand[1], prevHand[0], prevHand[3], prevHand[2]]); 
   }
+
+  const handleKeyPress = useCallback((event: KeyboardEvent) => {  
+    //cg?.move("e2", "e4");
+    //const newPieces = new Map<Key, Piece | undefined>();
+    //newPieces.set('e4', { role: 'king', color: 'white' });
+    //cg?.newPiece({ role: 'king', color: 'white' }, "e4");
+    //cg?.setPieces(newPieces);
+    //cg?.set({fen: "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"});
+  }, [cg]);
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyPress);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyPress);
+    };
+  }, [handleKeyPress]);
+
 
   return (
     <div>
