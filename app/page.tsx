@@ -63,7 +63,7 @@ export default function Home() {
       socket.emit("message", `move ${encode(move)}`);
       console.log(board.play(move)); 
       new Audio("sounds/move-self.mp3").play();
-
+ 
       updateRunning(0, true); 
       updateRunning(1, false);
     }
@@ -78,7 +78,7 @@ export default function Home() {
         cg?.cancelPredrop();
       }
       else if (args[0] === "userside") {
-        if (!playing) {
+        if (!playing || side != args[1]) {
           board.reset(); 
           cg?.set({
             movable: {
@@ -419,7 +419,7 @@ export default function Home() {
             <Button variant="contained">Puzzles</Button>
           </div>
           <div className="footer">
-              <Button variant="contained" onClick={resign}>Logout</Button>
+              <Button variant="contained" onClick={resign}>Exit</Button>
             </div>
         </div>
           <div className="flex rounded-lg bg-white ml-60 mt-6 outline outline-2 outline-gray-300 shadow-lg select-none">
